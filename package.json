@@ -1,10 +1,12 @@
 {
   "name": "@vault-flow/provider-x-bookmarks",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Vault Flow provider for X (Twitter) bookmarks download",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"
