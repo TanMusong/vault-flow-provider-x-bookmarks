@@ -1,0 +1,104 @@
+name: Release Provider
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: 24
+        package-manager-cache: false
+
+    - name: Install dependencies
+      run: |
+        npm ci
+
+
+    - name: Build
+      run: |
+        npm run build
+
+
+    - name: Validate version
+      run: |
+        TAG_VERSION="${GITHUB_REF_NAME#v}"
+        PACKAGE_VERSION=$(node -p "require('./package.json').version")
+
+        if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+          echo "Tag version ($TAG_VERSION) does not match package version ($PACKAGE_VERSION)"
+          exit 1
+        fi
+
+
+    - name: Create package zip
+      run: |
+        zip -r provider.zip . \
+          -x "node_modules/*" \
+          -x ".git/*" \
+          -x ".github/*"
+
+
+    - name: Generate version.json
+      run: |
+
+        git log $(git describe --tags --abbrev=0 HEAD^)..HEAD \
+          --pretty=format:"%s" \
+          > changes.txt || true
+
+
+        node <<EOF
+
+        const fs = require("fs");
+        const pkg = require("./package.json");
+
+        const changes =
+          fs.readFileSync("changes.txt", "utf8")
+            .split("\n")
+            .filter(Boolean);
+
+
+        const url =
+          "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}/provider.zip";
+
+
+        fs.writeFileSync(
+          "version.json",
+          JSON.stringify(
+            {
+              id: pkg.name,
+              version: pkg.version,
+              url,
+              changes
+            },
+            null,
+            2
+          )
+        );
+
+        EOF
+
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          provider.zip
+          version.json

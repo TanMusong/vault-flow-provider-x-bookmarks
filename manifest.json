@@ -1,0 +1,76 @@
+{
+  "id": "x-bookmarks",
+  "name": {
+    "zh-CN": "X书签下载",
+    "zh-TW": "X書籤下載",
+    "en-US": "X Bookmarks Download"
+  },
+  "description": {
+    "zh-CN": "将 X 书签转化为下载任务流",
+    "zh-TW": "將 X 書籤轉化為下載任務流",
+    "en-US": "Convert X bookmarks into download task flow"
+  },
+  "site": {
+    "zh-CN": "X",
+    "zh-TW": "X",
+    "en-US": "X"
+  },
+  "icon": "assets/icon.webp",
+  "cookieDomains": [".x.com"],
+  "version": "https://github.com/TanMusong/vault-flow-provider-x-bookmarks/releases/latest/download/version.json",
+  "config": [
+    {
+      "key": "interval",
+      "name": { "zh-CN": "执行间隔（秒）", "zh-TW": "執行間隔（秒）", "en-US": "Interval (seconds)" },
+      "type": "number",
+      "placeholder": { "zh-CN": "默认1800", "zh-TW": "預設1800", "en-US": "Default 1800" }
+    },
+    {
+      "key": "cookies",
+      "name": "Cookie",
+      "type": "textarea",
+      "placeholder": { "zh-CN": "在此粘贴 Cookie", "zh-TW": "在此貼上 Cookie", "en-US": "Paste your cookies here" }
+    },
+    {
+      "key": "downloadPath",
+      "name": { "zh-CN": "下载路径模板", "zh-TW": "下載路徑模板", "en-US": "Download Path Template" },
+      "type": "text",
+      "placeholder": { "zh-CN": "{type}/{user}/{author_id}_{author}", "zh-TW": "{type}/{user}/{author_id}_{author}", "en-US": "{type}/{user}/{author_id}_{author}" }
+    },
+    {
+      "key": "maxConcurrent",
+      "name": { "zh-CN": "最大并发下载", "zh-TW": "最大並行下載", "en-US": "Max Concurrent Downloads" },
+      "type": "number",
+      "placeholder": { "zh-CN": "默认3", "zh-TW": "預設3", "en-US": "Default 3" }
+    },
+    {
+      "key": "timeout",
+      "name": { "zh-CN": "超时（秒）", "zh-TW": "逾時（秒）", "en-US": "Timeout (seconds)" },
+      "type": "number",
+      "placeholder": { "zh-CN": "默认60", "zh-TW": "預設60", "en-US": "Default 60" }
+    },
+    {
+      "key": "maxRetries",
+      "name": { "zh-CN": "最大重试次数", "zh-TW": "最大重試次數", "en-US": "Max Retries" },
+      "type": "number",
+      "placeholder": { "zh-CN": "默认3", "zh-TW": "預設3", "en-US": "Default 3" }
+    },
+    {
+      "key": "proxyEnabled",
+      "name": { "zh-CN": "代理", "zh-TW": "代理", "en-US": "Proxy" },
+      "type": "checkbox",
+      "on": [
+        {
+          "key": "proxyHost",
+          "name": { "zh-CN": "代理地址", "zh-TW": "代理地址", "en-US": "Proxy Host" },
+          "type": "text"
+        },
+        {
+          "key": "proxyPort",
+          "name": { "zh-CN": "代理端口", "zh-TW": "代理端口", "en-US": "Proxy Port" },
+          "type": "number"
+        }
+      ]
+    }
+  ]
+}

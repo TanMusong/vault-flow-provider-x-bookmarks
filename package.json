@@ -1,0 +1,22 @@
+{
+  "name": "@vault-flow/provider-x-bookmarks",
+  "version": "1.0.0",
+  "description": "Vault Flow provider for X (Twitter) bookmarks download",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@vault-flow/provider-api": "^1.0.1",
+    "puppeteer-core": "^25.1.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "@types/node": "^26.0.0"
+  }
+}
