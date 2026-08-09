@@ -62,8 +62,8 @@ export class XBookmarksProvider implements VaultProvider {
     return { username, userId };
   }
 
-  private async launchBrowser(ctx: ProviderContext): Promise<{ browser: Browser; page: Page }> {
-    const cookies = ctx.storage.get('cookies') as string | undefined;
+  private async launchBrowser(ctx: ProviderContext, cookies?: string): Promise<{ browser: Browser; page: Page }> {
+    const cookieStr = cookies || ctx.storage.get('cookies') as string | undefined;
     const browser = await puppeteer.launch({
       executablePath: process.env.CHROME_PATH || '',
       headless: true,
@@ -71,8 +71,8 @@ export class XBookmarksProvider implements VaultProvider {
     }) as Browser;
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
-    if (cookies) {
-      const cookieList = cookies.split(';').map(c => c.trim()).filter(Boolean).map(c => {
+    if (cookieStr) {
+      const cookieList = cookieStr.split(';').map(c => c.trim()).filter(Boolean).map(c => {
         const [name, ...rest] = c.split('=');
         return { name: name.trim(), value: rest.join('='), domain: '.x.com', path: '/' };
       });
@@ -84,13 +84,18 @@ export class XBookmarksProvider implements VaultProvider {
   async addTask(ctx: ProviderContext, params: AddTaskParams): Promise<AddTaskResponse> {
     let browser: Browser | null = null;
     try {
-      const { browser: b, page } = await this.launchBrowser(ctx);
+      const cookies = params.cookies as string | undefined;
+      if (!cookies) {
+        return { success: false, message: 'Cookie is required' };
+      }
+      const { browser: b, page } = await this.launchBrowser(ctx, cookies);
       browser = b;
       const { username, userId } = await this.checkLogin(ctx, page);
       await page.close().catch(() => {});
       if (!userId) {
         return { success: false, message: 'X login check failed - could not detect user' };
       }
+      ctx.storage.set('cookies', cookies);
       const interval = params.interval || 60;
       return { success: true, name: `X Bookmarks - ${username}`, userId, interval };
     } catch (err) {
