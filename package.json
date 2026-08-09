@@ -12,13 +12,13 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@vault-flow/provider-api": "^1.0.1",
+    "@vault-flow/provider-api": "^1.0.3",
     "puppeteer-core": "^25.1.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
-    "@types/node": "^26.0.0"
+    "@types/node": "^26.0.0",
+    "typescript": "^6.0.3"
   }
 }

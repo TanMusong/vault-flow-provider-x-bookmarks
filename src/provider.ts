@@ -8,8 +8,6 @@ import { BOOKMARKS_URL, UnbookmarkResult, unbookmarkPage } from './actions';
 
 puppeteer.use(StealthPlugin());
 
-const STORAGE_KEY_COOKIES = 'cookies';
-
 export class XBookmarksProvider implements VaultProvider {
   constructor() {}
 
@@ -96,8 +94,7 @@ export class XBookmarksProvider implements VaultProvider {
         return { success: false, message: 'X login check failed - could not detect user' };
       }
       ctx.storage.set('cookies', cookies);
-      const interval = params.interval || 60;
-      return { success: true, name: `X Bookmarks - ${username}`, userId, interval };
+      return { success: true, name: username };
     } catch (err) {
       return { success: false, message: (err as Error).message.slice(0, 100) };
     } finally {
