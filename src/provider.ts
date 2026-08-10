@@ -109,9 +109,9 @@ export class XBookmarksProvider implements VaultProvider {
     return { success: true };
   }
 
-  private async fetchItems(page: Page, skipIds?: string[], timeout = 60000): Promise<{ items: TwitterItem[]; cursor: string | null }> {
-    let allItems: TwitterItem[] = [];
-    let lastCursor: string | null = null;
+  private async collectItems(page: Page, maxItems = 100, timeout = 60000): Promise<TwitterItem[]> {
+    const allItems: TwitterItem[] = [];
+    const seenIds = new Set<string>();
 
     const responseHandler = async (res: import('puppeteer-core').HTTPResponse) => {
       const url = res.url();
@@ -125,13 +125,9 @@ export class XBookmarksProvider implements VaultProvider {
         }
         if (!parsed?.data?.bookmark_timeline_v2?.timeline?.instructions?.length) return;
         for (const item of parseApiResponse(parsed)) {
-          if (!allItems.find(x => x.id === item.id)) allItems.push(item);
-        }
-        for (const inst of parsed.data.bookmark_timeline_v2.timeline.instructions) {
-          const entries = inst.entries || [];
-          const lastEntry = entries[entries.length - 1];
-          if (lastEntry?.entryId?.startsWith('cursor-bottom')) {
-            lastCursor = (lastEntry.content as { value?: string })?.value || null;
+          if (!seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            allItems.push(item);
           }
         }
       } catch (_e) { /* */ }
@@ -140,12 +136,23 @@ export class XBookmarksProvider implements VaultProvider {
     page.on('response', responseHandler);
     try {
       await page.goto(BOOKMARKS_URL, { waitUntil: 'networkidle2', timeout });
-      for (let i = 0; i < 30 && allItems.length === 0; i++) {
+      // Wait for initial items
+      for (let i = 0; i < 15 && allItems.length === 0; i++) {
         await new Promise<void>(r => setTimeout(r, 1000));
       }
-      const filtered = allItems.filter(item => !skipIds || skipIds.indexOf(item.id) < 0);
-      console.log(`[twitter] fetchItems: ${allItems.length} total, ${filtered.length} after filter`);
-      return { items: filtered, cursor: lastCursor };
+      // Scroll to load more
+      while (allItems.length < maxItems) {
+        const prevCount = allItems.length;
+        await page.evaluate(() => window.scrollBy(0, window.innerHeight * 3));
+        await new Promise<void>(r => setTimeout(r, 2000));
+        // Wait for network activity
+        for (let i = 0; i < 5 && allItems.length === prevCount; i++) {
+          await new Promise<void>(r => setTimeout(r, 1000));
+        }
+        if (allItems.length === prevCount) break; // No new items loaded
+      }
+      console.log(`[twitter] collectItems: ${allItems.length} items collected`);
+      return allItems.slice(0, maxItems);
     } finally {
       page.off('response', responseHandler);
     }
@@ -171,9 +178,6 @@ export class XBookmarksProvider implements VaultProvider {
       }
       ctx.addLog('info', `X login OK: ${username}`);
 
-      let downloaded = 0, failed = 0;
-      const skipIds: string[] = [];
-
       const handleUnbookmark = async (item: TwitterItem) => {
         const actionPage = await browser!.newPage();
         await actionPage.setViewport({ width: 1280, height: 800 });
@@ -191,11 +195,19 @@ export class XBookmarksProvider implements VaultProvider {
         }
       };
 
-      const processItem = async (item: TwitterItem): Promise<void> => {
-        skipIds.push(item.id);
+      // Phase 1: Collect items
+      const items = await this.collectItems(page);
+      await page.close().catch(() => {});
+      page = null;
+      ctx.addLog('info', `Collected ${items.length} items`);
+
+      // Phase 2: Download all items
+      let downloaded = 0, failed = 0;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
         if (ctx.hasSuccessfulDownloadRecord(item.id)) {
           if (item.bookmarked) await handleUnbookmark(item);
-          return;
+          continue;
         }
         const mediaUrls = getMediaUrls(item);
         if (mediaUrls.length === 0) {
@@ -207,7 +219,7 @@ export class XBookmarksProvider implements VaultProvider {
             dataJson: { detailUrl: item.detailUrl, raw: item.raw }
           });
           if (item.bookmarked) await handleUnbookmark(item);
-          return;
+          continue;
         }
         try {
           const files: DownloadFile[] = [];
@@ -225,20 +237,27 @@ export class XBookmarksProvider implements VaultProvider {
             const dest = ctx.path.join(userDir, dl.filename);
             for (const url of dl.urls) {
               try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 30000);
                 const resp = await fetch(url, {
                   headers: { 'Cookie': cookies || '', 'Referer': 'https://x.com/' },
+                  signal: controller.signal,
                 });
-                if (!resp.ok) continue;
+                clearTimeout(timeout);
+                if (!resp.ok) {
+                  ctx.addLog('warn', `HTTP ${resp.status} for ${dl.filename}: ${url.slice(0, 80)}`);
+                  continue;
+                }
                 const buffer = Buffer.from(await resp.arrayBuffer());
                 ctx.fs.writeFileSync(dest, buffer as unknown as string);
-                const fileSize = buffer.length;
-                files[fi].fileSize = fileSize;
-                files[fi].fileExpectedSize = fileSize;
+                files[fi].fileSize = buffer.length;
+                files[fi].fileExpectedSize = buffer.length;
                 files[fi].url = url;
                 files[fi].fileStatus = FileStatus.Success;
                 ctx.updateDownloadRecord(item.id, { files });
                 return;
-              } catch (_e) {
+              } catch (e) {
+                ctx.addLog('warn', `Download error for ${dl.filename}: ${(e as Error).message?.slice(0, 80)}`);
                 continue;
               }
             }
@@ -258,7 +277,6 @@ export class XBookmarksProvider implements VaultProvider {
             failed++;
           }
         } catch (err) {
-          console.error('[twitter] download error:', (err as Error).message);
           ctx.addLog('error', `Download error: ${item.id} - ${(err as Error).message}`);
           ctx.addDownloadRecord({
             id: item.id, author: item.author, authorId: item.authorId, desc: item.desc,
@@ -267,21 +285,8 @@ export class XBookmarksProvider implements VaultProvider {
           });
           failed++;
         }
-      };
-
-      let fetched: { items: TwitterItem[]; cursor: string | null };
-      let maxRequestCount = 10;
-      let processedCount = 0;
-
-      do {
-        fetched = await this.fetchItems(page, skipIds);
-        maxRequestCount--;
-        for (const item of fetched.items) {
-          await processItem(item);
-        }
-        processedCount += fetched.items.length;
-        ctx.emitTaskProgress(processedCount, processedCount);
-      } while (fetched.items.length > 0 && maxRequestCount > 0);
+        ctx.emitTaskProgress(i + 1, items.length);
+      }
 
       return {
         state: 1,
@@ -295,7 +300,12 @@ export class XBookmarksProvider implements VaultProvider {
       return { state: 0, message: (err as Error).message, downloaded: 0, failed: 0, total: 0, duration: Date.now() - startTime };
     } finally {
       if (page) await page.close().catch(() => {});
-      if (browser) await browser.close().catch(() => {});
+      if (browser) {
+        await Promise.race([
+          browser.close(),
+          new Promise<void>(r => setTimeout(() => { try { (browser as any).process()?.kill(); } catch {} r(); }, 10000)),
+        ]).catch(() => {});
+      }
     }
   }
 }
