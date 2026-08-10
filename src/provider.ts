@@ -211,7 +211,7 @@ export class XBookmarksProvider implements VaultProvider {
         }
         try {
           const files: DownloadFile[] = [];
-          const userDir = ctx.path.join(ctx.configDir, 'x', username, `${item.authorId || 'unknown'}_${item.author || 'unknown'}`);
+          const userDir = ctx.path.join(ctx.downloadDir, 'x', username, `${item.authorId || 'unknown'}_${item.author || 'unknown'}`);
           if (!ctx.fs.existsSync(userDir)) ctx.fs.mkdirSync(userDir, { recursive: true });
           for (const dl of mediaUrls) {
             files.push({ type: dl.type, filename: dl.filename, url: dl.urls[0] || '', fileSize: 0, fileExpectedSize: 0, fileStatus: FileStatus.Downloading });
