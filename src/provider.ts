@@ -305,6 +305,18 @@ export class XBookmarksProvider implements VaultProvider {
         ctx.emitTaskProgress(i + 1, items.length);
       }
 
+      // Refresh cookies after task execution
+      try {
+        if (page) {
+          const p = page as Page;
+          const currentCookies = await p.cookies();
+          const cookieStr = currentCookies.map((c: any) => `${c.name}=${c.value}`).join('; ');
+          if (cookieStr) {
+            ctx.saveConfig({ ...ctx.config, cookies: cookieStr });
+          }
+        }
+      } catch (_e) { /* ignore cookie refresh errors */ }
+
       return {
         state: 1,
         message: 'ok',
