@@ -94,6 +94,7 @@ export class XBookmarksProvider implements VaultProvider {
         return { success: false, message: 'X login check failed - could not detect user' };
       }
       ctx.storage.set('cookies', cookies);
+      if (params.downloadPath) ctx.storage.set('downloadPath', params.downloadPath as string);
       return { success: true, name: username };
     } catch (err) {
       return { success: false, message: (err as Error).message.slice(0, 100) };
@@ -202,8 +203,10 @@ export class XBookmarksProvider implements VaultProvider {
       ctx.addLog('info', `Collected ${items.length} items`);
 
       // Phase 2: Download all items
+      ctx.emitTaskProgress(0, items.length);
       let downloaded = 0, failed = 0;
       for (let i = 0; i < items.length; i++) {
+        ctx.emitTaskProgress(i, items.length);
         const item = items[i];
         if (ctx.hasSuccessfulDownloadRecord(item.id)) {
           if (item.bookmarked) await handleUnbookmark(item);
@@ -223,7 +226,12 @@ export class XBookmarksProvider implements VaultProvider {
         }
         try {
           const files: DownloadFile[] = [];
-          const userDir = ctx.path.join(ctx.downloadDir, 'x', username, `${item.authorId || 'unknown'}_${item.author || 'unknown'}`);
+          const downloadPathTemplate = ctx.storage.get<string>('downloadPath') || '{type}/{user}/{author_id}_{author}';
+          const vars: Record<string, string> = {
+            type: 'x', user: username,
+            author: item.author || 'unknown', author_id: item.authorId || 'unknown'
+          };
+          const userDir = ctx.path.join(ctx.downloadDir, downloadPathTemplate.replace(/\{(\w+)\}/g, (_, k) => vars[k] || k));
           if (!ctx.fs.existsSync(userDir)) ctx.fs.mkdirSync(userDir, { recursive: true });
           for (const dl of mediaUrls) {
             files.push({ type: dl.type, filename: dl.filename, url: dl.urls[0] || '', fileSize: 0, fileExpectedSize: 0, fileStatus: FileStatus.Downloading });
