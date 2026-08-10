@@ -1,4 +1,4 @@
-import type { VaultProvider, ProviderContext, DownloadFile, TaskResult, AddTaskParams, AddTaskResponse, ProviderResult } from '@vault-flow/provider-api';
+import type { VaultProvider, ProviderContext, DownloadFile, ExecuteTaskResult, AddTaskResult, DeleteTaskResult, TaskErrorResult } from '@vault-flow/provider-api';
 import { MediaType, FileStatus, DownloadStatus } from '@vault-flow/provider-api';
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
@@ -61,7 +61,7 @@ export class XBookmarksProvider implements VaultProvider {
   }
 
   private async launchBrowser(ctx: ProviderContext, cookies?: string): Promise<{ browser: Browser; page: Page }> {
-    const cookieStr = cookies || ctx.storage.get('cookies') as string | undefined;
+    const cookieStr = cookies || (ctx.config.cookies as string) || '';
     const browser = await puppeteer.launch({
       executablePath: process.env.CHROME_PATH || '',
       headless: true,
@@ -79,22 +79,30 @@ export class XBookmarksProvider implements VaultProvider {
     return { browser, page };
   }
 
-  async addTask(ctx: ProviderContext, params: AddTaskParams): Promise<AddTaskResponse> {
+  private msg(locale: string, key: string, fallback: string): string {
+    const messages: Record<string, Record<string, string>> = {
+      'cookie_required': { 'zh-CN': '请填写 Cookie', 'zh-TW': '請填寫 Cookie', 'en-US': 'Cookie is required' },
+      'login_failed': { 'zh-CN': 'X 登录检测失败，无法识别用户', 'zh-TW': 'X 登入偵測失敗，無法識別使用者', 'en-US': 'X login check failed - could not detect user' },
+      'login_expired': { 'zh-CN': 'X 登录已过期', 'zh-TW': 'X 登入已過期', 'en-US': 'X login expired' },
+    };
+    const m = messages[key];
+    return m ? (m[locale] || m['en-US'] || fallback) : fallback;
+  }
+
+  async addTask(ctx: ProviderContext): Promise<AddTaskResult | TaskErrorResult> {
     let browser: Browser | null = null;
     try {
-      const cookies = params.cookies as string | undefined;
+      const cookies = ctx.config.cookies as string | undefined;
       if (!cookies) {
-        return { success: false, message: 'Cookie is required' };
+        return { success: false, message: this.msg(ctx.locale, 'cookie_required', 'Cookie is required') };
       }
       const { browser: b, page } = await this.launchBrowser(ctx, cookies);
       browser = b;
       const { username, userId } = await this.checkLogin(ctx, page);
       await page.close().catch(() => {});
       if (!userId) {
-        return { success: false, message: 'X login check failed - could not detect user' };
+        return { success: false, message: this.msg(ctx.locale, 'login_failed', 'X login check failed') };
       }
-      ctx.storage.set('cookies', cookies);
-      if (params.downloadPath) ctx.storage.set('downloadPath', params.downloadPath as string);
       return { success: true, name: username };
     } catch (err) {
       return { success: false, message: (err as Error).message.slice(0, 100) };
@@ -103,10 +111,11 @@ export class XBookmarksProvider implements VaultProvider {
     }
   }
 
-  async deleteTask(ctx: ProviderContext, taskId: string): Promise<ProviderResult> {
-    if (ctx.hasPostDownloadRecord(taskId)) {
-      return { success: false, message: 'Cannot delete task with existing downloads' };
-    }
+  async deleteTask(ctx: ProviderContext, taskId: string): Promise<DeleteTaskResult | TaskErrorResult> {
+    return { success: true };
+  }
+
+  async onTaskConfigUpdate(_ctx: ProviderContext, _taskId: string): Promise<DeleteTaskResult> {
     return { success: true };
   }
 
@@ -159,7 +168,7 @@ export class XBookmarksProvider implements VaultProvider {
     }
   }
 
-  async executeTask(ctx: ProviderContext): Promise<TaskResult> {
+  async executeTask(ctx: ProviderContext): Promise<ExecuteTaskResult> {
     const startTime = Date.now();
     console.log(`[twitter] executeTask: ${ctx.taskId}`);
 
@@ -167,7 +176,7 @@ export class XBookmarksProvider implements VaultProvider {
     let page: Page | null = null;
 
     try {
-      const cookies = ctx.storage.get('cookies') as string | undefined;
+      const cookies = ctx.config.cookies as string | undefined;
       const launched = await this.launchBrowser(ctx);
       browser = launched.browser;
       page = launched.page;
@@ -175,7 +184,7 @@ export class XBookmarksProvider implements VaultProvider {
       const { username } = await this.checkLogin(ctx, page);
       if (!username) {
         ctx.addLog('warn', 'X login expired - checkLogin returned empty username');
-        return { state: 2, message: 'status.login_expired', downloaded: 0, failed: 0, total: 0, duration: Date.now() - startTime };
+        return { state: 2, message: this.msg(ctx.locale, 'login_expired', 'X login expired'), downloaded: 0, failed: 0, total: 0, duration: Date.now() - startTime };
       }
       ctx.addLog('info', `X login OK: ${username}`);
 
@@ -226,7 +235,7 @@ export class XBookmarksProvider implements VaultProvider {
         }
         try {
           const files: DownloadFile[] = [];
-          const downloadPathTemplate = ctx.storage.get<string>('downloadPath') || '{type}/{user}/{author_id}_{author}';
+          const downloadPathTemplate = (ctx.config.downloadPath as string) || '{type}/{user}/{author_id}_{author}';
           const vars: Record<string, string> = {
             type: 'x', user: username,
             author: item.author || 'unknown', author_id: item.authorId || 'unknown'
