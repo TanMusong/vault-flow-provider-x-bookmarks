@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   release:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -49,27 +48,203 @@ jobs:
         fi
 
 
-    - name: Get changes
+    - name: Generate release information
+      shell: bash
       run: |
         CURRENT_TAG="${GITHUB_REF_NAME}"
 
-        PREVIOUS_TAG=$(
-          git for-each-ref \
-            --sort=-creatordate \
-            --format='%(refname:short)' \
-            refs/tags/v* |
-          grep -A1 "^${CURRENT_TAG}$" |
-          tail -n1
-        )
+        PREVIOUS_TAG=$(git tag --sort=-version:refname \
+          | grep '^v' \
+          | grep -v "^${CURRENT_TAG}$" \
+          | head -n 1 || true)
 
-        if [ -n "$PREVIOUS_TAG" ] && [ "$PREVIOUS_TAG" != "$CURRENT_TAG" ]; then
-          git log "${PREVIOUS_TAG}..${CURRENT_TAG}" \
-            --pretty=format:"%s" \
-            > changes.txt
+        echo "Current tag: ${CURRENT_TAG}"
+        echo "Previous tag: ${PREVIOUS_TAG:-none}"
+
+        if [ -n "$PREVIOUS_TAG" ]; then
+          RANGE="${PREVIOUS_TAG}..${CURRENT_TAG}"
         else
-          echo "Initial release" > changes.txt
+          RANGE="${CURRENT_TAG}"
         fi
 
+        FEATURES=""
+        FIXES=""
+        REFACTORS=""
+        DOCS=""
+        PERFORMANCE=""
+        TESTS=""
+        BUILD=""
+        CI=""
+        CHORES=""
+        OTHER=""
+
+        VERSION_CHANGES=""
+
+        while IFS= read -r line; do
+          SUBJECT=$(echo "$line" | cut -d'|' -f1)
+          HASH=$(echo "$line" | cut -d'|' -f2)
+
+          TYPE=$(echo "$SUBJECT" | sed -nE 's/^([a-zA-Z]+)(\(.+\))?!?:.*/\1/p')
+
+          COMMIT="  - ${SUBJECT} ([${HASH:0:7}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${HASH}))"
+
+          # GitHub Release: keep ALL commits and classify them.
+          case "${TYPE}" in
+            feat)
+              FEATURES="${FEATURES}${COMMIT}"$'\n'
+              ;;
+
+            fix)
+              FIXES="${FIXES}${COMMIT}"$'\n'
+              ;;
+
+            refactor)
+              REFACTORS="${REFACTORS}${COMMIT}"$'\n'
+              ;;
+
+            docs)
+              DOCS="${DOCS}${COMMIT}"$'\n'
+              ;;
+
+            perf)
+              PERFORMANCE="${PERFORMANCE}${COMMIT}"$'\n'
+              ;;
+
+            test)
+              TESTS="${TESTS}${COMMIT}"$'\n'
+              ;;
+
+            build)
+              BUILD="${BUILD}${COMMIT}"$'\n'
+              ;;
+
+            ci)
+              CI="${CI}${COMMIT}"$'\n'
+              ;;
+
+            chore)
+              CHORES="${CHORES}${COMMIT}"$'\n'
+              ;;
+
+            *)
+              OTHER="${OTHER}${COMMIT}"$'\n'
+              ;;
+          esac
+
+
+          # version.json: only keep program-related changes.
+          case "${TYPE}" in
+            feat|fix|refactor|perf)
+              VERSION_CHANGES="${VERSION_CHANGES}${SUBJECT}"$'\n'
+              ;;
+
+            docs|chore|ci|build|test)
+              ;;
+
+            *)
+              VERSION_CHANGES="${VERSION_CHANGES}${SUBJECT}"$'\n'
+              ;;
+          esac
+
+        done < <(
+          git log "$RANGE" \
+            --pretty=format:"%s|%H"
+        )
+
+
+        # --------------------------------------------------
+        # Generate GitHub Release notes
+        # --------------------------------------------------
+
+        {
+          if [ -n "$FEATURES" ]; then
+            echo "## Features"
+            echo
+            printf "%s" "$FEATURES"
+            echo
+          fi
+
+          if [ -n "$FIXES" ]; then
+            echo "## Bug Fixes"
+            echo
+            printf "%s" "$FIXES"
+            echo
+          fi
+
+          if [ -n "$REFACTORS" ]; then
+            echo "## Refactoring"
+            echo
+            printf "%s" "$REFACTORS"
+            echo
+          fi
+
+          if [ -n "$PERFORMANCE" ]; then
+            echo "## Performance"
+            echo
+            printf "%s" "$PERFORMANCE"
+            echo
+          fi
+
+          if [ -n "$DOCS" ]; then
+            echo "## Documentation"
+            echo
+            printf "%s" "$DOCS"
+            echo
+          fi
+
+          if [ -n "$TESTS" ]; then
+            echo "## Tests"
+            echo
+            printf "%s" "$TESTS"
+            echo
+          fi
+
+          if [ -n "$BUILD" ]; then
+            echo "## Build"
+            echo
+            printf "%s" "$BUILD"
+            echo
+          fi
+
+          if [ -n "$CI" ]; then
+            echo "## CI"
+            echo
+            printf "%s" "$CI"
+            echo
+          fi
+
+          if [ -n "$CHORES" ]; then
+            echo "## Chores"
+            echo
+            printf "%s" "$CHORES"
+            echo
+          fi
+
+          if [ -n "$OTHER" ]; then
+            echo "## Other Changes"
+            echo
+            printf "%s" "$OTHER"
+            echo
+          fi
+        } > release-notes.md
+
+
+        # --------------------------------------------------
+        # Generate changes for version.json
+        # --------------------------------------------------
+
+        printf "%s" "$VERSION_CHANGES" > changes.txt
+
+        if [ ! -s changes.txt ]; then
+          echo "No program changes." > changes.txt
+        fi
+
+
+        echo "Generated release notes:"
+        cat release-notes.md
+
+        echo
+        echo "Changes for version.json:"
         cat changes.txt
 
 
@@ -89,6 +264,7 @@ jobs:
         const fs = require("fs");
         const pkg = require("./package.json");
         const manifest = require("./manifest.json");
+
         const changes =
           fs.readFileSync("changes.txt", "utf8")
             .split("\n")
@@ -117,7 +293,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        body_path: changes.txt
+        body_path: release-notes.md
         files: |
           provider.zip
           version.json
