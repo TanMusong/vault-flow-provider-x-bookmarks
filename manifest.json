@@ -23,6 +23,7 @@
       "key": "cookies",
       "name": "Cookie",
       "type": "textarea",
+      "password": true,
       "placeholder": { "zh-CN": "在此粘贴 Cookie", "zh-TW": "在此貼上 Cookie", "en-US": "Paste your cookies here" }
     },
     {
