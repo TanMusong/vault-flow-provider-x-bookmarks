@@ -68,6 +68,13 @@ export class XBookmarksProvider implements VaultProvider {
     return { username, userId };
   }
 
+  private parseCookies(cookies: string, domain: string): { name: string; value: string; domain: string; path: string }[] {
+    return cookies.split(';').map(c => c.trim()).filter(Boolean).map(c => {
+      const [name, ...rest] = c.split('=');
+      return { name: name.trim(), value: rest.join('=').trim(), domain, path: '/' };
+    }).filter(c => c.name && c.value);
+  }
+
   private async launchBrowser(ctx: ProviderContext, cookies?: string): Promise<{ browser: Browser; page: Page }> {
     const cookieStr = cookies || (ctx.config.cookies as string) || '';
     const browser = await puppeteer.launch({
@@ -75,15 +82,10 @@ export class XBookmarksProvider implements VaultProvider {
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     }) as Browser;
+    const puppeteerCookies = this.parseCookies(cookieStr, '.x.com');
+    if (puppeteerCookies.length > 0) await browser.setCookie(...puppeteerCookies);
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
-    if (cookieStr) {
-      const cookieList = cookieStr.split(';').map(c => c.trim()).filter(Boolean).map(c => {
-        const [name, ...rest] = c.split('=');
-        return { name: name.trim(), value: rest.join('='), domain: '.x.com', path: '/' };
-      });
-      await page.setCookie(...cookieList);
-    }
     return { browser, page };
   }
 
@@ -302,13 +304,10 @@ export class XBookmarksProvider implements VaultProvider {
 
       // Refresh cookies after task execution
       try {
-        if (page) {
-          const p = page as Page;
-          const currentCookies = await p.cookies();
-          const cookieStr = currentCookies.map((c: any) => `${c.name}=${c.value}`).join('; ');
-          if (cookieStr) {
-            ctx.saveConfig({ ...ctx.config, cookies: cookieStr });
-          }
+        const currentCookies = await browser!.cookies();
+        const cookieStr = currentCookies.map((c: any) => `${c.name}=${c.value}`).join('; ');
+        if (cookieStr) {
+          ctx.saveConfig({ ...ctx.config, cookies: cookieStr });
         }
       } catch (_e) { /* ignore cookie refresh errors */ }
 
