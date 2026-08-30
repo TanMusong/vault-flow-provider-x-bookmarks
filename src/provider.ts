@@ -8,6 +8,14 @@ import { BOOKMARKS_URL, UnbookmarkResult, unbookmarkPage } from './actions';
 
 puppeteer.use(StealthPlugin());
 
+function sanitizeDirName(name: string): string {
+  return name
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\.+$/, '')
+    .replace(/\s+$/, '')
+    .trim() || 'unknown';
+}
+
 export class XBookmarksProvider implements VaultProvider {
   constructor() {}
 
@@ -237,8 +245,8 @@ export class XBookmarksProvider implements VaultProvider {
           const files: DownloadFile[] = [];
           const downloadPathTemplate = (ctx.config.downloadPath as string) || '{type}/{user}/{author_id}_{author}';
           const vars: Record<string, string> = {
-            type: 'x', user: username,
-            author: item.author || 'unknown', author_id: item.authorId || 'unknown'
+            type: 'x', user: sanitizeDirName(username),
+            author: sanitizeDirName(item.author || 'unknown'), author_id: item.authorId || 'unknown'
           };
           const userDir = ctx.path.join(ctx.downloadDir, downloadPathTemplate.replace(/\{(\w+)\}/g, (_, k) => vars[k] || k));
           if (!ctx.fs.existsSync(userDir)) ctx.fs.mkdirSync(userDir, { recursive: true });
