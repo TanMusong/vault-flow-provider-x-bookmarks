@@ -20,6 +20,13 @@
   "version": "https://github.com/TanMusong/vault-flow-provider-x-bookmarks/releases/latest/download/version.json",
   "config": [
     {
+      "key": "taskName",
+      "name": { "zh-CN": "任务名称", "zh-TW": "任務名稱", "en-US": "Task Name" },
+      "type": "text",
+      "immutable": true,
+      "default": "Task-{date}"
+    },
+    {
       "key": "cookies",
       "name": "Cookie",
       "type": "textarea",

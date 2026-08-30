@@ -98,25 +98,12 @@ export class XBookmarksProvider implements VaultProvider {
   }
 
   async addTask(ctx: ProviderContext): Promise<AddTaskResult | TaskErrorResult> {
-    let browser: Browser | null = null;
-    try {
-      const cookies = ctx.config.cookies as string | undefined;
-      if (!cookies) {
-        return { success: false, message: this.msg(ctx.locale, 'cookie_required', 'Cookie is required') };
-      }
-      const { browser: b, page } = await this.launchBrowser(ctx, cookies);
-      browser = b;
-      const { username, userId } = await this.checkLogin(ctx, page);
-      await page.close().catch(() => {});
-      if (!userId) {
-        return { success: false, message: this.msg(ctx.locale, 'login_failed', 'X login check failed') };
-      }
-      return { success: true, name: username };
-    } catch (err) {
-      return { success: false, message: (err as Error).message.slice(0, 100) };
-    } finally {
-      if (browser) await browser.close().catch(() => {});
+    const cookies = ctx.config.cookies as string | undefined;
+    if (!cookies) {
+      return { success: false, message: this.msg(ctx.locale, 'cookie_required', 'Cookie is required') };
     }
+    const taskName = (ctx.config.taskName as string) || `Task-${new Date().toISOString().slice(0, 10)}`;
+    return { success: true, name: taskName };
   }
 
   async deleteTask(ctx: ProviderContext, taskId: string): Promise<DeleteTaskResult | TaskErrorResult> {
