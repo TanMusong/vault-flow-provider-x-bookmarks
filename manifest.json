@@ -37,8 +37,8 @@
       "key": "downloadPath",
       "name": { "zh-CN": "下载路径模板", "zh-TW": "下載路徑模板", "en-US": "Download Path Template" },
       "type": "text",
-      "default": "{type}/{user}/{author_id}_{author}",
-      "placeholder": { "zh-CN": "{type}/{user}/{author_id}_{author}", "zh-TW": "{type}/{user}/{author_id}_{author}", "en-US": "{type}/{user}/{author_id}_{author}" }
+      "default": "{type}/{task}/{author_id}_{author}",
+      "placeholder": { "zh-CN": "{type}/{task}/{author_id}_{author}", "zh-TW": "{type}/{task}/{author_id}_{author}", "en-US": "{type}/{task}/{author_id}_{author}" }
     },
     {
       "key": "maxConcurrent",

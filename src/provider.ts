@@ -232,9 +232,9 @@ export class XBookmarksProvider implements VaultProvider {
         }
         try {
           const files: DownloadFile[] = [];
-          const downloadPathTemplate = (ctx.config.downloadPath as string) || '{type}/{user}/{author_id}_{author}';
+          const downloadPathTemplate = (ctx.config.downloadPath as string) || '{type}/{task}/{author_id}_{author}';
           const vars: Record<string, string> = {
-            type: 'x', user: sanitizeDirName(username),
+            type: 'x', task: sanitizeDirName(ctx.config.taskName as string || 'default'),
             author: sanitizeDirName(item.author || 'unknown'), author_id: item.authorId || 'unknown'
           };
           const userDir = ctx.path.join(ctx.downloadDir, downloadPathTemplate.replace(/\{(\w+)\}/g, (_, k) => vars[k] || k));
