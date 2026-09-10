@@ -1,6 +1,6 @@
 import type { Page } from 'puppeteer-core';
 
-export const BOOKMARKS_URL = 'https://x.com/i/bookmarks';
+export const BOOKMARKS_URL = 'https://x.com/i/history';
 
 let cachedQueryId: string | null = null;
 
